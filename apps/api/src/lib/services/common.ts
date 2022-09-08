@@ -378,6 +378,6 @@ export async function removeService({ id }: { id: string }): Promise<void> {
 	await prisma.searxng.deleteMany({ where: { serviceId: id } });
 	await prisma.weblate.deleteMany({ where: { serviceId: id } });
 	await prisma.taiga.deleteMany({ where: { serviceId: id } });
-	
+
 	await prisma.service.delete({ where: { id } });
 }
