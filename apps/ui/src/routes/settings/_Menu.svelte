@@ -18,4 +18,9 @@
 		class="sub-menu no-underline"
 		class:sub-menu-active={$page.routeId === 'settings/ssh-keys'}>SSH Keys</a
 	>
+	<a
+		href="/settings/communications"
+		class="sub-menu no-underline"
+		class:sub-menu-active={$page.routeId === 'settings/communications'}>Communications</a
+	>
 </div>
