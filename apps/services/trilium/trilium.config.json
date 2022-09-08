@@ -1,0 +1,19 @@
+{
+    "name": "trilium",
+    "type": "service",
+    "enable": true,
+    "maintainer": "David <david@cryptic.dev> Mydlarz",
+    "supportedVersion": {
+        "name": "trilium",
+        "fancyName": "Trilium Notes",
+        "baseImage": "zadam/trilium",
+        "images": [],
+        "versions": [
+            "latest"
+        ],
+        "recommendedVersion": "latest",
+        "ports": {
+            "main": 8080
+        }
+    }
+}

@@ -1792,7 +1792,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
         return errorHandler({ status, message })
     }
 }
-async function startServiceContainers(dockerId, composeFileDestination) {
+export async function startServiceContainers(dockerId, composeFileDestination) {
     await executeDockerCmd({ dockerId, command: `docker compose -f ${composeFileDestination} pull` })
     await executeDockerCmd({ dockerId, command: `docker compose -f ${composeFileDestination} build --no-cache` })
     await executeDockerCmd({ dockerId, command: `docker compose -f ${composeFileDestination} create` })
