@@ -333,7 +333,6 @@ async function startMinioService(request: FastifyRequest<ServiceStartStop>) {
                 image: `${image}:${version}`,
                 volumes: [`${id}-minio-data:/data`],
                 environmentVariables: {
-                    MINIO_SERVER_URL: fqdn,
                     MINIO_DOMAIN: getDomain(fqdn),
                     MINIO_ROOT_USER: rootUser,
                     MINIO_ROOT_PASSWORD: rootUserPassword,
