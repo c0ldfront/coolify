@@ -865,3 +865,38 @@ export const taiga = [{
 	isBoolean: false,
 	isEncrypted: false
 }]
+
+export const gitea = [
+{
+	name: 'mysqlUser',
+	isEditable: true,
+	isLowerCase: false,
+	isNumber: false,
+	isBoolean: false,
+	isEncrypted: false
+},
+{
+	name: 'mysqlPassword',
+	isEditable: true,
+	isLowerCase: false,
+	isNumber: false,
+	isBoolean: false,
+	isEncrypted: true
+},
+{
+	name: 'mysqlRootUser',
+	isEditable: true,
+	isLowerCase: false,
+	isNumber: false,
+	isBoolean: false,
+	isEncrypted: false
+},
+{
+	name: 'mysqlRootUserPassword',
+	isEditable: true,
+	isLowerCase: false,
+	isNumber: false,
+	isBoolean: false,
+	isEncrypted: true
+}
+]

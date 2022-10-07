@@ -104,6 +104,21 @@ async function checkProxies() {
             }
         }
 
+        const giteaWithSSH = await prisma.gitea.findMany({
+            where: { sshPublicPort: { not: null }},
+            include: { service: { include: {destinationDocker: true}}}
+        });
+        for (const ssh of giteaWithSSH) {
+            const { service, sshPublicPort } = ssh;
+            const { destinationDockerId, destinationDocker, id } = service;
+            if (destinationDockerId && destinationDocker.isCoolifyProxyUsed) {
+                portReachable = await isReachable(sshPublicPort, { host: destinationDocker.remoteIpAddress || ipv4 || ipv6 })
+                if (!portReachable) {
+                    await startTraefikTCPProxy(destinationDocker, id, sshPublicPort, 22, 'giteassh');
+                }
+            }
+        }
+
         // HTTP Proxies
         const minioInstances = await prisma.minio.findMany({
             where: { publicPort: { not: null } },

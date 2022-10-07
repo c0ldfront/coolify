@@ -96,3 +96,9 @@ export interface SetGlitchTipSettings extends OnlyId {
         emailSmtpUseTls: boolean
     }
 }
+
+export interface ActivateGiteaSSH extends OnlyId {
+    Body: {
+        sshEnabled: boolean
+    }
+}

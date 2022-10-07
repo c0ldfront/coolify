@@ -33,14 +33,13 @@
 			if (name === 'ftpEnabled') {
 				ftpEnabled = !ftpEnabled;
 			}
+
 			try {
 				const {
 					publicPort,
 					ftpUser: user,
 					ftpPassword: password
-				} = await post(`/services/${id}/wordpress/ftp`, {
-					ftpEnabled
-				});
+				} = await post(`/services/${id}/wordpress/ftp`, { ftpEnabled });
 				ftpUrl = generateUrl(publicPort);
 				ftpUser = user;
 				ftpPassword = password;

@@ -76,6 +76,9 @@ export async function startService(request: FastifyRequest<ServiceStartStop>) {
         if (type === 'trilium') {
             return await startTriliumService(request)
         }
+        if (type === 'gitea') {
+            return await startGiteaService(request)
+        }
 
         throw `Service type ${type} not supported.`
     } catch (error) {
@@ -863,6 +866,7 @@ async function startGhostService(request: FastifyRequest<ServiceStartStop>) {
         }
 
         const { volumeMounts } = persistentVolumes(id, persistentStorage, config)
+
         const composeFile: ComposeFile = {
             version: '3.8',
             services: {
@@ -2773,6 +2777,112 @@ export async function migrateAppwriteDB(request: FastifyRequest<OnlyId>, reply: 
             return await reply.code(201).send()
         }
         throw { status: 500, message: 'Could cleanup logs.' }
+    } catch ({ status, message }) {
+        return errorHandler({ status, message })
+    }
+}
+
+async function startGiteaService(request: FastifyRequest<ServiceStartStop>) {
+    try {
+        const { id } = request.params;
+        const teamId = request.user.teamId;
+        const service = await getServiceFromDB({ id, teamId });
+        const {
+            type,
+            version,
+            fqdn,
+            destinationDockerId,
+            destinationDocker,
+            persistentStorage,
+            exposePort,
+            gitea: {
+                mysqlRootUserPassword,
+                mysqlUser,
+                mysqlPassword,
+                mysqlDatabase
+            },
+            serviceSecret,
+        } =
+            service;
+        const network = destinationDockerId && destinationDocker.network;
+        const port = getServiceMainPort('gitea');
+
+        const sshPort = 2222;
+        
+        const { workdir } = await createDirectories({ repository: type, buildId: id });
+
+        const image = getServiceImage(type);
+        
+        const config = {
+            gitea: {
+                image: `${image}:${version}`,
+                volumes: [
+                    `${id}-gitea:/data`
+                ],
+                environmentVariables: {
+                    USER_UID: 1000,
+                    USER_GID: 1000,
+                    GITEA__database__DB_TYPE: 'mysql',
+                    GITEA__database__HOST: `${id}-mysql`,
+                    GITEA__database__NAME: mysqlDatabase,
+                    GITEA__database__USER: mysqlUser,
+                    GITEA__database__PASSWD: mysqlPassword,
+                    GITEA__server__ROOT_URL: fqdn,
+                    // GITEA__server__DISABLE_SSH: true,
+                    // GITEA__server__SSH_PORT: " ",
+                }
+            },
+            mysql: {
+                image: `mysql:8`,
+                volumes: [`${id}-mysql-data:/var/lib/mysql`],
+                environmentVariables: {
+                    MYSQL_ROOT_PASSWORD: mysqlRootUserPassword,
+                    MYSQL_USER: mysqlUser,
+                    MYSQL_PASSWORD: mysqlPassword,
+                    MYSQL_DATABASE: mysqlDatabase,
+                }
+            }
+        };
+
+        if (serviceSecret.length > 0) {
+            serviceSecret.forEach((secret) => {
+                config.gitea.environmentVariables[secret.name] = secret.value;
+            });
+        }
+
+        const { volumeMounts } = persistentVolumes(id, persistentStorage, config)
+        const composeFile: ComposeFile = {
+            version: '3.8',
+            services: {
+                [id]: {
+                    container_name: id,
+                    image: config.gitea.image,
+                    volumes: config.gitea.volumes,
+                    environment: config.gitea.environmentVariables,
+                    ...(exposePort ? { ports: [`${exposePort}:${port}`] } : {}),
+                    labels: makeLabelForServices('gitea'),
+                    depends_on: [`${id}-mysql`],
+                    ...defaultComposeConfiguration(network),
+                },
+                [`${id}-mysql`]: {
+                    container_name: `${id}-mysql`,
+                    image: config.mysql.image,
+                    volumes: config.mysql.volumes,
+                    environment: config.mysql.environmentVariables,
+                    ...defaultComposeConfiguration(network),
+                }
+            },
+            networks: {
+                [network]: {
+                    external: true
+                }
+            },
+            volumes: volumeMounts
+        };
+        const composeFileDestination = `${workdir}/docker-compose.yaml`;
+        await fs.writeFile(composeFileDestination, yaml.dump(composeFile));
+        await startServiceContainers(destinationDocker.id, composeFileDestination)
+        return {}
     } catch ({ status, message }) {
         return errorHandler({ status, message })
     }

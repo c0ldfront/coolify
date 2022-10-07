@@ -1265,12 +1265,14 @@ export async function getFreePublicPort({ id, remoteEngine, engine, remoteIpAddr
 				select: { publicPort: true }
 			})
 		).map((a) => a.publicPort);
+
 		const wpFtpUsed = await (
 			await prisma.wordpress.findMany({
 				where: { ftpPublicPort: { not: null }, id: { not: id }, service: { destinationDocker: { remoteIpAddress } } },
 				select: { ftpPublicPort: true }
 			})
 		).map((a) => a.ftpPublicPort);
+
 		const wpUsed = await (
 			await prisma.wordpress.findMany({
 				where: { mysqlPublicPort: { not: null }, id: { not: id }, service: { destinationDocker: { remoteIpAddress } } },
@@ -1283,7 +1285,15 @@ export async function getFreePublicPort({ id, remoteEngine, engine, remoteIpAddr
 				select: { publicPort: true }
 			})
 		).map((a) => a.publicPort);
-		const usedPorts = [...dbUsed, ...wpFtpUsed, ...wpUsed, ...minioUsed];
+
+		const giteaUsed = await (
+			await prisma.gitea.findMany({
+				where: { sshPublicPort: { not: null }, id: { not: id }, service: { destinationDocker: { remoteIpAddress } } },
+				select: { sshPublicPort: true }
+			})
+		).map((a) => a.sshPublicPort);
+
+		const usedPorts = [...dbUsed, ...wpFtpUsed, ...wpUsed, ...minioUsed, ...giteaUsed];
 		const range = generateRangeArray(minPort, maxPort)
 		const availablePorts = range.filter(port => !usedPorts.includes(port))
 		for (const port of availablePorts) {
@@ -1300,12 +1310,14 @@ export async function getFreePublicPort({ id, remoteEngine, engine, remoteIpAddr
 				select: { publicPort: true }
 			})
 		).map((a) => a.publicPort);
+
 		const wpFtpUsed = await (
 			await prisma.wordpress.findMany({
 				where: { ftpPublicPort: { not: null }, id: { not: id }, service: { destinationDocker: { engine } } },
 				select: { ftpPublicPort: true }
 			})
 		).map((a) => a.ftpPublicPort);
+
 		const wpUsed = await (
 			await prisma.wordpress.findMany({
 				where: { mysqlPublicPort: { not: null }, id: { not: id }, service: { destinationDocker: { engine } } },
@@ -1318,7 +1330,15 @@ export async function getFreePublicPort({ id, remoteEngine, engine, remoteIpAddr
 				select: { publicPort: true }
 			})
 		).map((a) => a.publicPort);
-		const usedPorts = [...dbUsed, ...wpFtpUsed, ...wpUsed, ...minioUsed];
+
+		const giteaUsed = await (
+			await prisma.gitea.findMany({
+				where: { sshPublicPort: { not: null }, id: { not: id }, service: { destinationDocker: { engine } } },
+				select: { sshPublicPort: true }
+			})
+		).map((a) => a.sshPublicPort);
+
+		const usedPorts = [...dbUsed, ...wpFtpUsed, ...wpUsed, ...minioUsed, ...giteaUsed];
 		const range = generateRangeArray(minPort, maxPort)
 		const availablePorts = range.filter(port => !usedPorts.includes(port))
 		for (const port of availablePorts) {
@@ -1344,7 +1364,10 @@ export async function startTraefikTCPProxy(
 	const { ipv4, ipv6 } = await listSettings();
 
 	let dependentId = id;
+	
 	if (type === 'wordpressftp') dependentId = `${id}-ftp`;
+	if (type === 'giteassh') dependentId = `${id}-ssh`;
+
 	const foundDependentContainer = await checkContainer({
 		dockerId,
 		container: dependentId,
@@ -1358,7 +1381,9 @@ export async function startTraefikTCPProxy(
 			});
 
 			const ip = JSON.parse(Config)[0].Gateway;
+
 			let traefikUrl = otherTraefikEndpoint;
+
 			if (remoteEngine) {
 				let ip = null;
 				if (isDev) {

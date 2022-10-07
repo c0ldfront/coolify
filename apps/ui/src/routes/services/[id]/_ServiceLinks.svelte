@@ -83,4 +83,8 @@
 	<a href="https://github.com/zadam/trilium" target="_blank">
 		<Icons.Trilium />
 	</a>
+{:else if service.type === 'gitea'}
+	<a href="https://gitea.io" target="_blank">
+		<Icons.Gitea />
+	</a>
 {/if}

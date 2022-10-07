@@ -255,4 +255,15 @@ export const supportedServiceTypesAndVersions = [
 			main: 8080
 		}
 	},
+	{
+		name: 'gitea',
+		fancyName: 'Gitea',
+		baseImage: 'gitea/gitea',
+		images: [`mysql:8`],
+		versions: ['latest', '1.17.1'],
+		recommendedVersion: 'latest',
+		ports: {
+			main: 3000,
+		}
+	},
 ];

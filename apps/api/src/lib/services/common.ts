@@ -21,6 +21,7 @@ export const includeServices: any = {
 	searxng: true,
 	weblate: true,
 	taiga: true,
+	gitea: true,
 };
 export async function configureServiceType({
 	id,
@@ -350,6 +351,26 @@ export async function configureServiceType({
 				}
 			}
 		});
+	} else if (type === 'gitea') {
+		const mysqlUser = cuid();
+		const mysqlPassword = encrypt(generatePassword({}));
+		const mysqlRootUser = cuid();
+		const mysqlRootUserPassword = encrypt(generatePassword({}));
+
+		await prisma.service.update({
+			where: { id },
+			data: {
+				type,
+				gitea: {
+					create: {
+						mysqlUser,
+						mysqlPassword,
+						mysqlRootUser,
+						mysqlRootUserPassword
+					}
+				}
+			}
+		});
 	} else {
 		await prisma.service.update({
 			where: { id },
@@ -378,6 +399,7 @@ export async function removeService({ id }: { id: string }): Promise<void> {
 	await prisma.searxng.deleteMany({ where: { serviceId: id } });
 	await prisma.weblate.deleteMany({ where: { serviceId: id } });
 	await prisma.taiga.deleteMany({ where: { serviceId: id } });
+	await prisma.gitea.deleteMany({ where: { serviceId: id } });
 
 	await prisma.service.delete({ where: { id } });
 }

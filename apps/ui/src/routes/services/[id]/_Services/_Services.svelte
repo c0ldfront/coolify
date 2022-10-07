@@ -40,6 +40,7 @@
 	import Explainer from '$lib/components/Explainer.svelte';
 	import Taiga from './_Taiga.svelte';
 	import DocLink from '$lib/components/DocLink.svelte';
+	import Gitea from './_Gitea.svelte';
 
 	const { id } = $page.params;
 	$: isDisabled =
@@ -190,6 +191,9 @@
 			}
 			if (service.type === 'fider') {
 				service.fider.emailNoreply = 'noreply@demo.com';
+			}
+			if (service.type === 'gitea') {
+				service.gitea.mysqlDatabase = 'db';
 			}
 			await handleSubmit();
 		}
@@ -445,6 +449,8 @@
 			<Weblate bind:service />
 		{:else if service.type === 'taiga'}
 			<Taiga bind:service />
+		{:else if service.type === 'gitea'}
+			<Gitea bind:service {readOnly} />
 		{/if}
 	</form>
 </div>

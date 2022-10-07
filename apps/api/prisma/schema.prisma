@@ -398,6 +398,7 @@ model Service {
   searxng            Searxng?
   weblate            Weblate?
   taiga              Taiga?
+  gitea              Gitea?
 }
 
 model PlausibleAnalytics {
@@ -643,4 +644,21 @@ model Taiga {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   service              Service  @relation(fields: [serviceId], references: [id])
+}
+
+model Gitea {
+  id                    String   @id @default(cuid())
+  publicPort            Int?
+  serviceId             String   @unique
+  mysqlRootUser         String
+  mysqlRootUserPassword String
+  mysqlDatabase         String?
+  mysqlUser             String
+  mysqlPassword         String
+  mysqlPublicPort       Int?
+  sshEnabled            Boolean  @default(false)
+  sshPublicPort         Int?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  service               Service  @relation(fields: [serviceId], references: [id])
 }
