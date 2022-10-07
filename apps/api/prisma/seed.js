@@ -94,6 +94,16 @@ async function main() {
 			}
 		});
 	}
+	// Set new preview secrets
+	const secrets = await prisma.secret.findMany({ where: { isPRMRSecret: false } })
+	if (secrets.length > 0) {
+		for (const secret of secrets) {
+			const previewSecrets = await prisma.secret.findMany({ where: { applicationId: secret.applicationId, name: secret.name, isPRMRSecret: true } })
+			if (previewSecrets.length === 0) {
+				await prisma.secret.create({ data: { ...secret, id: undefined, isPRMRSecret: true } })
+			}
+		}
+	}
 }
 main()
 	.catch((e) => {

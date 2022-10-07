@@ -328,8 +328,11 @@
 </script>
 
 <form on:submit={handleSubmit}>
-	<div class="flex flex-col space-y-2 px-4 xl:flex-row xl:space-y-0 xl:space-x-2 ">
-		<div class="custom-select-wrapper">
+	<div
+		class="flex lg:flex-row flex-col lg:space-y-0 space-y-2 space-x-0 lg:space-x-2 items-center lg:justify-center lg:px-0 px-8"
+	>
+		<div class="custom-select-wrapper w-full">
+			<label for="groups" class="pb-1">Groups</label>
 			<Select
 				placeholder={loading.base
 					? $t('application.configuration.loading_groups')
@@ -354,7 +357,8 @@
 				optionIdentifier="id"
 			/>
 		</div>
-		<div class="custom-select-wrapper">
+		<div class="custom-select-wrapper w-full">
+			<label for="projects" class="pb-1">Projects</label>
 			<Select
 				placeholder={loading.projects
 					? $t('application.configuration.loading_projects')
@@ -379,7 +383,8 @@
 				isSearchable={true}
 			/>
 		</div>
-		<div class="custom-select-wrapper">
+		<div class="custom-select-wrapper w-full">
+			<label for="branches" class="pb-1">Branches</label>
 			<Select
 				placeholder={loading.branches
 					? $t('application.configuration.loading_branches')

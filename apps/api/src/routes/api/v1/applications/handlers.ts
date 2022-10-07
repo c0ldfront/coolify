@@ -15,7 +15,6 @@ import { checkContainer, formatLabelsOnDocker, isContainerExited, removeContaine
 import type { FastifyRequest } from 'fastify';
 import type { GetImages, CancelDeployment, CheckDNS, CheckRepository, DeleteApplication, DeleteSecret, DeleteStorage, GetApplicationLogs, GetBuildIdLogs, SaveApplication, SaveApplicationSettings, SaveApplicationSource, SaveDeployKey, SaveDestination, SaveSecret, SaveStorage, DeployApplication, CheckDomain, StopPreviewApplication, RestartPreviewApplication, GetBuilds } from './types';
 import { OnlyId } from '../../../../types';
-import path from 'node:path';
 
 function filterObject(obj, callback) {
     return Object.fromEntries(Object.entries(obj).
@@ -66,6 +65,43 @@ export async function getImages(request: FastifyRequest<GetImages>) {
         }
 
         return { baseImage, baseImages, baseBuildImage, baseBuildImages, publishDirectory, port }
+    } catch ({ status, message }) {
+        return errorHandler({ status, message })
+    }
+}
+export async function cleanupUnconfiguredApplications(request: FastifyRequest<any>) {
+    try {
+        const teamId = request.user.teamId
+        let applications = await prisma.application.findMany({
+            where: { teams: { some: { id: teamId === "0" ? undefined : teamId } } },
+            include: { settings: true, destinationDocker: true, teams: true },
+        });
+        for (const application of applications) {
+            if (!application.buildPack || !application.destinationDockerId || !application.branch || (!application.settings?.isBot && !application?.fqdn)) {
+                if (application?.destinationDockerId && application.destinationDocker?.network) {
+                    const { stdout: containers } = await executeDockerCmd({
+                        dockerId: application.destinationDocker.id,
+                        command: `docker ps -a --filter network=${application.destinationDocker.network} --filter name=${application.id} --format '{{json .}}'`
+                    })
+                    if (containers) {
+                        const containersArray = containers.trim().split('\n');
+                        for (const container of containersArray) {
+                            const containerObj = JSON.parse(container);
+                            const id = containerObj.ID;
+                            await removeContainer({ id, dockerId: application.destinationDocker.id });
+                        }
+                    }
+                }
+                await prisma.applicationSettings.deleteMany({ where: { applicationId: application.id } });
+                await prisma.buildLog.deleteMany({ where: { applicationId: application.id } });
+                await prisma.build.deleteMany({ where: { applicationId: application.id } });
+                await prisma.secret.deleteMany({ where: { applicationId: application.id } });
+                await prisma.applicationPersistentStorage.deleteMany({ where: { applicationId: application.id } });
+                await prisma.applicationConnectedDatabase.deleteMany({ where: { applicationId: application.id } });
+                await prisma.application.deleteMany({ where: { id: application.id } });
+            }
+        }
+        return {}
     } catch ({ status, message }) {
         return errorHandler({ status, message })
     }
@@ -321,15 +357,10 @@ export async function saveApplication(request: FastifyRequest<SaveApplication>, 
 export async function saveApplicationSettings(request: FastifyRequest<SaveApplicationSettings>, reply: FastifyReply) {
     try {
         const { id } = request.params
-        const { debug, previews, dualCerts, autodeploy, branch, projectId, isBot, isDBBranching } = request.body
-        // const isDouble = await checkDoubleBranch(branch, projectId);
-        // if (isDouble && autodeploy) {
-        //     await prisma.applicationSettings.updateMany({ where: { application: { branch, projectId } }, data: { autodeploy: false } })
-        //     throw { status: 500, message: 'Cannot activate automatic deployments until only one application is defined for this repository / branch.' }
-        // }
+        const { debug, previews, dualCerts, autodeploy, branch, projectId, isBot, isDBBranching, isCustomSSL } = request.body
         await prisma.application.update({
             where: { id },
-            data: { fqdn: isBot ? null : undefined, settings: { update: { debug, previews, dualCerts, autodeploy, isBot, isDBBranching } } },
+            data: { fqdn: isBot ? null : undefined, settings: { update: { debug, previews, dualCerts, autodeploy, isBot, isDBBranching, isCustomSSL } } },
             include: { destinationDocker: true }
         });
         return reply.code(201).send();
@@ -767,7 +798,10 @@ export async function saveBuildPack(request, reply) {
     try {
         const { id } = request.params
         const { buildPack } = request.body
-        await prisma.application.update({ where: { id }, data: { buildPack } });
+        const { baseImage, baseBuildImage } = setDefaultBaseImage(
+            buildPack
+        );
+        await prisma.application.update({ where: { id }, data: { buildPack, baseImage, baseBuildImage } });
         return reply.code(201).send()
     } catch ({ status, message }) {
         return errorHandler({ status, message })
@@ -787,64 +821,79 @@ export async function saveConnectedDatabase(request, reply) {
 export async function getSecrets(request: FastifyRequest<OnlyId>) {
     try {
         const { id } = request.params
+
         let secrets = await prisma.secret.findMany({
-            where: { applicationId: id },
-            orderBy: { createdAt: 'desc' }
+            where: { applicationId: id, isPRMRSecret: false },
+            orderBy: { createdAt: 'asc' }
         });
+        let previewSecrets = await prisma.secret.findMany({
+            where: { applicationId: id, isPRMRSecret: true },
+            orderBy: { createdAt: 'asc' }
+        });
+
         secrets = secrets.map((secret) => {
             secret.value = decrypt(secret.value);
             return secret;
         });
-        secrets = secrets.filter((secret) => !secret.isPRMRSecret).sort((a, b) => {
-            return ('' + a.name).localeCompare(b.name);
-        })
+        previewSecrets = previewSecrets.map((secret) => {
+            secret.value = decrypt(secret.value);
+            return secret;
+        });
+
         return {
-            secrets
+            previewSecrets: previewSecrets.sort((a, b) => {
+                return ('' + a.name).localeCompare(b.name);
+            }),
+            secrets: secrets.sort((a, b) => {
+                return ('' + a.name).localeCompare(b.name);
+            })
         }
     } catch ({ status, message }) {
         return errorHandler({ status, message })
     }
 }
 
+export async function updatePreviewSecret(request: FastifyRequest<SaveSecret>, reply: FastifyReply) {
+    try {
+        const { id } = request.params
+        let { name, value } = request.body
+        if (value) {
+            value = encrypt(value.trim())
+        } else {
+            value = ''
+        }
+        await prisma.secret.updateMany({
+            where: { applicationId: id, name, isPRMRSecret: true },
+            data: { value }
+        });
+        return reply.code(201).send()
+    } catch ({ status, message }) {
+        return errorHandler({ status, message })
+    }
+}
+export async function updateSecret(request: FastifyRequest<SaveSecret>, reply: FastifyReply) {
+    try {
+        const { id } = request.params
+        const { name, value, isBuildSecret = undefined } = request.body
+        await prisma.secret.updateMany({
+            where: { applicationId: id, name },
+            data: { value: encrypt(value.trim()), isBuildSecret }
+        });
+        return reply.code(201).send()
+    } catch ({ status, message }) {
+        return errorHandler({ status, message })
+    }
+}
 export async function saveSecret(request: FastifyRequest<SaveSecret>, reply: FastifyReply) {
     try {
         const { id } = request.params
-        let { name, value, isBuildSecret, isPRMRSecret, isNew } = request.body
-        if (isNew) {
-            const found = await prisma.secret.findFirst({ where: { name, applicationId: id, isPRMRSecret } });
-            if (found) {
-                throw { status: 500, message: `Secret ${name} already exists.` }
-            } else {
-                value = encrypt(value.trim());
-                await prisma.secret.create({
-                    data: { name, value, isBuildSecret, isPRMRSecret, application: { connect: { id } } }
-                });
-            }
-        } else {
-            if (value) {
-                value = encrypt(value.trim());
-            }
-            const found = await prisma.secret.findFirst({ where: { applicationId: id, name, isPRMRSecret } });
-
-            if (found) {
-                if (!value && isPRMRSecret) {
-                    await prisma.secret.deleteMany({
-                        where: { applicationId: id, name, isPRMRSecret }
-                    });
-                } else {
-
-                    await prisma.secret.updateMany({
-                        where: { applicationId: id, name, isPRMRSecret },
-                        data: { value, isBuildSecret, isPRMRSecret }
-                    });
-                }
-
-            } else {
-                await prisma.secret.create({
-                    data: { name, value, isBuildSecret, isPRMRSecret, application: { connect: { id } } }
-                });
-            }
-        }
+        const { name, value, isBuildSecret = false } = request.body
+        await prisma.secret.create({
+            data: { name, value: encrypt(value.trim()), isBuildSecret, isPRMRSecret: false, application: { connect: { id } } }
+        });
+        await prisma.secret.create({
+            data: { name, value: encrypt(value.trim()), isBuildSecret, isPRMRSecret: true, application: { connect: { id } } }
+        });
         return reply.code(201).send()
     } catch ({ status, message }) {
         return errorHandler({ status, message })

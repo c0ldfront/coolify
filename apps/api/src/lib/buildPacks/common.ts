@@ -342,13 +342,13 @@ export function setDefaultBaseImage(buildPack: string | null, deploymentType: st
 	}
 	if (buildPack === 'laravel') {
 		payload.baseImage = 'webdevops/php-apache:8.2-alpine';
+		payload.baseImages = phpVersions;
 		payload.baseBuildImage = 'node:18';
 		payload.baseBuildImages = nodeVersions;
 	}
 	if (buildPack === 'heroku') {
 		payload.baseImage = 'heroku/buildpacks:20';
 		payload.baseImages = herokuVersions;
-
 	}
 	return payload;
 }
@@ -384,7 +384,7 @@ export const setDefaultConfiguration = async (data: any) => {
 	if (!publishDirectory) publishDirectory = template?.publishDirectory || null;
 	if (baseDirectory) {
 		if (!baseDirectory.startsWith('/')) baseDirectory = `/${baseDirectory}`;
-		if (!baseDirectory.endsWith('/')) baseDirectory = `${baseDirectory}/`;
+		if (baseDirectory.endsWith('/') && baseDirectory !== '/') baseDirectory = baseDirectory.slice(0, -1);
 	}
 	if (dockerFileLocation) {
 		if (!dockerFileLocation.startsWith('/')) dockerFileLocation = `/${dockerFileLocation}`;
@@ -479,7 +479,8 @@ export const saveBuildLog = async ({
 				line: encrypt(line)
 			}
 		})
-	} catch(error) {
+	} catch (error) {
+		if (isDev) return
 		return await prisma.buildLog.create({
 			data: {
 				line: addTimestamp, buildId, time: Number(day().valueOf()), applicationId
@@ -586,9 +587,9 @@ export async function buildImage({
 	} else {
 		await saveBuildLog({ line: `Building image started.`, buildId, applicationId });
 	}
-	if (!debug && isCache) {
+	if (!debug) {
 		await saveBuildLog({
-			line: `Debug turned off. To see more details, allow it in the configuration.`,
+			line: `Debug turned off. To see more details, allow it in the features tab.`,
 			buildId,
 			applicationId
 		});
@@ -605,30 +606,6 @@ export async function buildImage({
 	} else {
 		await saveBuildLog({ line: `Building image successful.`, buildId, applicationId });
 	}
-}
-
-export async function streamEvents({ stream, docker, buildId, applicationId, debug }) {
-	await new Promise((resolve, reject) => {
-		docker.engine.modem.followProgress(stream, onFinished, onProgress);
-		function onFinished(err, res) {
-			if (err) reject(err);
-			resolve(res);
-		}
-		async function onProgress(event) {
-			if (event.error) {
-				reject(event.error);
-			} else if (event.stream) {
-				if (event.stream !== '\n') {
-					if (debug)
-						await saveBuildLog({
-							line: `${event.stream.replace('\n', '')}`,
-							buildId,
-							applicationId
-						});
-				}
-			}
-		}
-	});
 }
 
 export function makeLabelForStandaloneApplication({
@@ -721,6 +698,7 @@ export async function buildCacheImageWithNode(data, imageForBuild) {
 	if (installCommand) {
 		Dockerfile.push(`RUN ${installCommand}`);
 	}
+	// Dockerfile.push(`ARG CACHEBUST=1`);
 	Dockerfile.push(`RUN ${buildCommand}`);
 	await fs.writeFile(`${workdir}/Dockerfile-cache`, Dockerfile.join('\n'));
 	await buildImage({ ...data, isCache: true });

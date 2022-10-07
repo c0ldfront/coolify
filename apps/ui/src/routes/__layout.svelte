@@ -66,6 +66,8 @@
 <script lang="ts">
 	export let baseSettings: any;
 	export let supportedServiceTypesAndVersions: any;
+	export let pendingInvitations: any = 0;
+
 	$appSession.isRegistrationEnabled = baseSettings.isRegistrationEnabled;
 	$appSession.ipv4 = baseSettings.ipv4;
 	$appSession.ipv6 = baseSettings.ipv6;
@@ -74,10 +76,13 @@
 	$appSession.whiteLabeledDetails.icon = baseSettings.whiteLabeledIcon;
 	$appSession.supportedServiceTypesAndVersions = supportedServiceTypesAndVersions;
 
+	$appSession.pendingInvitations = pendingInvitations;
+
 	export let userId: string;
 	export let teamId: string;
 	export let permission: string;
 	export let isAdmin: boolean;
+
 	import '../tailwind.css';
 	import Cookies from 'js-cookie';
 	import { fade } from 'svelte/transition';
@@ -202,11 +207,16 @@
 						<a
 							id="iam"
 							sveltekit:prefetch
-							href="/iam"
-							class="icons hover:text-iam"
+							href={$appSession.pendingInvitations.length > 0 ? '/iam/pending' : '/iam'}
+							class="icons hover:text-iam indicator"
 							class:text-iam={$page.url.pathname.startsWith('/iam')}
 							class:bg-coolgray-500={$page.url.pathname.startsWith('/iam')}
-							><svg
+						>
+							{#if $appSession.pendingInvitations.length > 0}
+								<span class="indicator-item rounded-full badge badge-primary mr-2"
+									>{pendingInvitations.length}</span
+								>
+							{/if}<svg
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 24 24"
 								class="h-9 w-9"
@@ -226,7 +236,7 @@
 						<a
 							id="settings"
 							sveltekit:prefetch
-							href={$appSession.teamId === '0' ? '/settings/global' : '/settings/ssh-keys'}
+							href={$appSession.teamId === '0' ? '/settings/coolify' : '/settings/ssh'}
 							class="icons hover:text-settings"
 							class:text-settings={$page.url.pathname.startsWith('/settings')}
 							class:bg-coolgray-500={$page.url.pathname.startsWith('/settings')}
@@ -312,7 +322,7 @@
 	</div>
 	<div class="drawer-side">
 		<label for="main-drawer" class="drawer-overlay w-full" />
-		<ul class="menu bg-coolgray-300 w-60 p-2  space-y-3 pt-4 ">
+		<ul class="menu bg-coolgray-200 w-60 p-2  space-y-3 pt-4 ">
 			<li>
 				<a
 					class="no-underline icons hover:text-white hover:bg-pink-500"
@@ -342,6 +352,7 @@
 
 			<li>
 				<a
+					id="servers"
 					class="no-underline icons hover:text-white hover:bg-sky-500"
 					sveltekit:prefetch
 					href="/servers"
@@ -387,13 +398,17 @@
 						<path d="M16 3.13a4 4 0 0 1 0 7.75" />
 						<path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />
 					</svg>
-					IAM
+					IAM {#if $appSession.pendingInvitations.length > 0}
+						<span class="indicator-item rounded-full badge badge-primary"
+							>{pendingInvitations.length}</span
+						>
+					{/if}
 				</a>
 			</li>
 			<li>
 				<a
 					class="no-underline icons hover:text-black hover:bg-settings"
-					href={$appSession.teamId === '0' ? '/settings/global' : '/settings/ssh-keys'}
+					href={$appSession.teamId === '0' ? '/settings/coolify' : '/settings/ssh'}
 					class:bg-settings={$page.url.pathname.startsWith('/settings')}
 					class:text-black={$page.url.pathname.startsWith('/settings')}
 				>

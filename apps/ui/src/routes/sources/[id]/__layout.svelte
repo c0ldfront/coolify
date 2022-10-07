@@ -9,7 +9,7 @@
 			if (id !== 'new' && (!source || Object.entries(source).length === 0)) {
 				return {
 					status: 302,
-					redirect: '/sources'
+					redirect: '/'
 				};
 			}
 			return {
@@ -53,7 +53,7 @@
 	}
 </script>
 
-{#if id !== 'new'}
+{#if id !== 'new' && $appSession.teamId === '0'}
 	<nav class="nav-side">
 		<button
 			id="delete"

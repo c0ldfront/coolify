@@ -122,7 +122,7 @@ export async function showDashboard(request: FastifyRequest) {
 	try {
 		const userId = request.user.userId;
 		const teamId = request.user.teamId;
-		const applications = await prisma.application.findMany({
+		let applications = await prisma.application.findMany({
 			where: { teams: { some: { id: teamId === "0" ? undefined : teamId } } },
 			include: { settings: true, destinationDocker: true, teams: true },
 		});
@@ -135,7 +135,7 @@ export async function showDashboard(request: FastifyRequest) {
 			include: { destinationDocker: true, teams: true },
 		});
 		const gitSources = await prisma.gitSource.findMany({
-			where: { teams: { some: { id: teamId === "0" ? undefined : teamId } } },
+			where: { OR: [{ teams: { some: { id: teamId === "0" ? undefined : teamId } } }, { isSystemWide: true }] },
 			include: { teams: true },
 		});
 		const destinations = await prisma.destinationDocker.findMany({
@@ -143,7 +143,29 @@ export async function showDashboard(request: FastifyRequest) {
 			include: { teams: true },
 		});
 		const settings = await listSettings();
+
+		let foundUnconfiguredApplication = false;
+		for (const application of applications) {
+			if (!application.buildPack || !application.destinationDockerId || !application.branch || (!application.settings?.isBot && !application?.fqdn)) {
+				foundUnconfiguredApplication = true
+			}
+		}
+		let foundUnconfiguredService = false;
+		for (const service of services) {
+			if (!service.fqdn) {
+				foundUnconfiguredService = true
+			}
+		}
+		let foundUnconfiguredDatabase = false;
+		for (const database of databases) {
+			if (!database.version) {
+				foundUnconfiguredDatabase = true
+			}
+		}
 		return {
+			foundUnconfiguredApplication,
+			foundUnconfiguredDatabase,
+			foundUnconfiguredService,
 			applications,
 			databases,
 			services,
@@ -331,8 +353,10 @@ export async function getCurrentUser(
 			// No new token -> not switching teams
 		}
 	}
+	const pendingInvitations = await prisma.teamInvitation.findMany({ where: { uid: request.user.userId } })
 	return {
 		settings: await prisma.setting.findFirst(),
+		pendingInvitations,
 		supportedServiceTypesAndVersions,
 		token,
 		...request.user,

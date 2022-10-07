@@ -8,6 +8,16 @@ datasource db {
   url      = env("COOLIFY_DATABASE_URL")
 }
 
+model Certificate {
+  id        String   @id @default(cuid())
+  key       String
+  cert      String
+  team      Team?    @relation(fields: [teamId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  teamId    String?
+}
+
 model Setting {
   id                    String   @id @default(cuid())
   fqdn                  String?  @unique
@@ -70,6 +80,7 @@ model Team {
   gitLabApps        GitlabApp[]
   service           Service[]
   users             User[]
+  certificate       Certificate[]
 }
 
 model TeamInvitation {
@@ -128,7 +139,7 @@ model PreviewApplication {
   sourceBranch       String
   isRandomDomain     Boolean     @default(false)
   customDomain       String?
-  applicationId      String      @unique
+  applicationId      String
   application        Application @relation(fields: [applicationId], references: [id])
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
@@ -161,6 +172,7 @@ model ApplicationSettings {
   isBot              Boolean     @default(false)
   isPublicRepository Boolean     @default(false)
   isDBBranching      Boolean     @default(false)
+  isCustomSSL        Boolean     @default(false)
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
   application        Application @relation(fields: [applicationId], references: [id])
@@ -235,6 +247,7 @@ model Build {
   previewApplicationId String?
   forceRebuild         Boolean  @default(false)
   sourceBranch         String?
+  sourceRepository     String?
   branch               String?
   status               String?  @default("queued")
   createdAt            DateTime @default(now())
@@ -287,6 +300,7 @@ model GitSource {
   updatedAt    DateTime      @updatedAt
   githubAppId  String?       @unique
   gitlabAppId  String?       @unique
+  isSystemWide Boolean       @default(false)
   gitlabApp    GitlabApp?    @relation(fields: [gitlabAppId], references: [id])
   githubApp    GithubApp?    @relation(fields: [githubAppId], references: [id])
   application  Application[]

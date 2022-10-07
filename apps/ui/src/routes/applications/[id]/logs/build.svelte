@@ -45,7 +45,6 @@
 		loadBuildLogsInterval = setInterval(() => {
 			getBuildLogs();
 		}, 2000);
-		
 	});
 	onDestroy(() => {
 		clearInterval(loadBuildLogsInterval);
@@ -54,14 +53,14 @@
 		const response = await get(`/applications/${$page.params.id}/logs/build?skip=${skip}`);
 		builds = response.builds;
 	}
-	
+
 	async function loadMoreBuilds() {
 		if (buildCount >= skip) {
 			skip = skip + 5;
 			noMoreBuilds = buildCount <= skip;
 			try {
 				const data = await get(`/applications/${id}/logs/build?skip=${skip}`);
-				builds = data.builds
+				builds = data.builds;
 				return;
 			} catch (error) {
 				return errorNotification(error);
@@ -107,23 +106,50 @@
 	}
 </script>
 
-<div class="block flex-row justify-start space-x-2 px-5 pt-6 sm:px-10 md:flex">
+<div class="mx-auto w-full">
+	<div class="flex flex-row border-b border-coolgray-500 mb-6 space-x-2">
+		<div class="flex flex-row">
+			<div class="title font-bold pb-3 pr-3">Build Logs</div>
+			<button class="btn btn-sm bg-error" on:click={resetQueue}>Reset Build Queue</button>
+		</div>
+	</div>
+</div>
+<div class="block flex-col justify-start space-x-5 flex flex-col-reverse lg:flex-row">
+	<div class="flex-1 md:w-96">
+		{#if $selectedBuildId}
+			{#key $selectedBuildId}
+				<svelte:component this={BuildLog} />
+			{/key}
+		{:else}
+		{#if buildCount === 0}
+		 Not build logs found.
+			{:else}
+			Select a build to see the logs.
+
+			{/if}
+		{/if}
+	</div>
 	<div class="mb-4 min-w-[16rem] space-y-2 md:mb-0 ">
-		<button class="btn btn-sm text-xs w-full bg-error" on:click={resetQueue}
-			>Reset Build Queue</button
-		>
 		<div class="top-4 md:sticky">
+					<div class="flex space-x-2 pb-2">
+						<button
+							disabled={noMoreBuilds}
+							class:btn-primary={!noMoreBuilds}
+							class=" btn btn-sm w-full"
+							on:click={loadMoreBuilds}>{$t('application.build.load_more')}</button
+						>
+					</div>
 			{#each builds as build, index (build.id)}
 				<div
 					id={`building-${build.id}`}
 					on:click={() => loadBuild(build.id)}
 					class:rounded-tr={index === 0}
 					class:rounded-br={index === builds.length - 1}
-					class="flex cursor-pointer items-center justify-center py-4 no-underline transition-all duration-100 hover:bg-coolgray-300 hover:shadow-xl"
+					class="flex cursor-pointer items-center justify-center py-4 no-underline transition-all duration-150 hover:bg-coolgray-300 hover:shadow-xl"
 					class:bg-coolgray-200={$selectedBuildId === build.id}
 				>
-					<div class="flex-col px-2 text-center min-w-[10rem]">
-						<div class="text-sm font-bold">
+					<div class="flex-col px-2 text-center">
+						<div class="text-sm font-bold truncate">
 							{build.branch || application.branch}
 						</div>
 						<div class="text-xs">
@@ -138,12 +164,10 @@
 						</div>
 					</div>
 
-					<div class="w-48 text-center text-xs">
+					<div class="w-32 text-center text-xs">
 						{#if build.status === 'running'}
 							<div>
-								<span class="font-bold text-xl"
-									>{build.elapsed}s</span
-								>
+								<span class="font-bold text-xl">{build.elapsed}s</span>
 							</div>
 						{:else if build.status !== 'queued'}
 							<div>{day(build.updatedAt).utc().fromNow()}</div>
@@ -162,26 +186,5 @@
 				>
 			{/each}
 		</div>
-		{#if !noMoreBuilds}
-			{#if buildCount > 5}
-				<div class="flex space-x-2 pb-10">
-					<button
-						disabled={noMoreBuilds}
-						class=" btn btn-sm w-full text-xs"
-						on:click={loadMoreBuilds}>{$t('application.build.load_more')}</button
-					>
-				</div>
-			{/if}
-		{/if}
-	</div>
-	<div class="flex-1 md:w-96">
-		{#if $selectedBuildId}
-			{#key $selectedBuildId}
-				<svelte:component this={BuildLog} />
-			{/key}
-		{/if}
 	</div>
 </div>
-{#if buildCount === 0}
-	<div class="text-center text-xl font-bold">{$t('application.build.no_logs')}</div>
-{/if}

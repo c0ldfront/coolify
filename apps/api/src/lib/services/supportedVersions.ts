@@ -63,7 +63,7 @@ export const supportedServiceTypesAndVersions = [
 	},
 	{
 		name: 'wordpress',
-		fancyName: 'Wordpress',
+		fancyName: 'WordPress',
 		baseImage: 'wordpress',
 		images: ['bitnami/mysql:5.7'],
 		versions: ['latest', 'php8.1', 'php8.0', 'php7.4', 'php7.3'],
@@ -235,7 +235,7 @@ export const supportedServiceTypesAndVersions = [
 	// },
 	{
 		name: 'grafana',
-		fancyName: 'Grafana Dashboard',
+		fancyName: 'Grafana',
 		baseImage: 'grafana/grafana',
 		images: [],
 		versions: ['latest', '9.1.3', '9.1.2', '9.0.8', '8.3.11', '8.4.11', '8.5.11'],

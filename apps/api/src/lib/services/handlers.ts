@@ -923,7 +923,7 @@ async function startMeilisearchService(request: FastifyRequest<ServiceStartStop>
         const config = {
             meilisearch: {
                 image: `${image}:${version}`,
-                volumes: [`${id}-datams:/data.ms`],
+                volumes: [`${id}-datams:/meili_data/data.ms`, `${id}-data:/meili_data `],
                 environmentVariables: {
                     MEILI_MASTER_KEY: masterKey
                 }
@@ -1434,6 +1434,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_EXECUTOR_HOST=http://${id}-executor/v1`,
                     `_APP_STATSD_HOST=${id}-telegraf`,
                     "_APP_STATSD_PORT=8125",
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1457,6 +1458,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_DB_SCHEMA=${mariadbDatabase}`,
                     `_APP_DB_USER=${mariadbUser}`,
                     `_APP_DB_PASS=${mariadbPassword}`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1480,6 +1482,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_DB_SCHEMA=${mariadbDatabase}`,
                     `_APP_DB_USER=${mariadbUser}`,
                     `_APP_DB_PASS=${mariadbPassword}`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1498,6 +1501,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_OPENSSL_KEY_V1=${opensslKeyV1}`,
                     `_APP_REDIS_HOST=${id}-redis`,
                     "_APP_REDIS_PORT=6379",
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1531,6 +1535,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_DB_PASS=${mariadbPassword}`,
                     `_APP_EXECUTOR_SECRET=${executorSecret}`,
                     `_APP_EXECUTOR_HOST=http://${id}-executor/v1`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1554,6 +1559,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_DB_SCHEMA=${mariadbDatabase}`,
                     `_APP_DB_USER=${mariadbUser}`,
                     `_APP_DB_PASS=${mariadbPassword}`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1579,6 +1585,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_DB_SCHEMA=${mariadbDatabase}`,
                     `_APP_DB_USER=${mariadbUser}`,
                     `_APP_DB_PASS=${mariadbPassword}`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1608,6 +1615,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_DB_SCHEMA=${mariadbDatabase}`,
                     `_APP_DB_USER=${mariadbUser}`,
                     `_APP_DB_PASS=${mariadbPassword}`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1634,6 +1642,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_DB_PASS=${mariadbPassword}`,
                     `_APP_EXECUTOR_SECRET=${executorSecret}`,
                     `_APP_EXECUTOR_HOST=http://${id}-executor/v1`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1658,6 +1667,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                 environment: [
                     "_APP_ENV=production",
                     `_APP_EXECUTOR_SECRET=${executorSecret}`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1675,6 +1685,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_OPENSSL_KEY_V1=${opensslKeyV1}`,
                     `_APP_REDIS_HOST=${id}-redis`,
                     "_APP_REDIS_PORT=6379",
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1691,6 +1702,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     "_APP_ENV=production",
                     `_APP_REDIS_HOST=${id}-redis`,
                     "_APP_REDIS_PORT=6379",
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1715,6 +1727,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `_APP_DB_SCHEMA=${mariadbDatabase}`,
                     `_APP_DB_USER=${mariadbUser}`,
                     `_APP_DB_PASS=${mariadbPassword}`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1731,6 +1744,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     "_APP_ENV=production",
                     `_APP_REDIS_HOST=${id}-redis`,
                     "_APP_REDIS_PORT=6379",
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                     ...secrets
                 ],
                 ...defaultComposeConfiguration(network),
@@ -1747,7 +1761,8 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                     `MYSQL_ROOT_PASSWORD=${mariadbRootUserPassword}`,
                     `MYSQL_USER=${mariadbUser}`,
                     `MYSQL_PASSWORD=${mariadbPassword}`,
-                    `MYSQL_DATABASE=${mariadbDatabase}`
+                    `MYSQL_DATABASE=${mariadbDatabase}`,
+                    `OPEN_RUNTIMES_NETWORK=${network}`,
                 ],
                 command: "mysqld --innodb-flush-method=fsync",
                 ...defaultComposeConfiguration(network),
@@ -1785,6 +1800,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
                 "_APP_INFLUXDB_PORT=8086",
                 `_APP_REDIS_HOST=${id}-redis`,
                 "_APP_REDIS_PORT=6379",
+                `OPEN_RUNTIMES_NETWORK=${network}`,
                 ...secrets
             ],
             ...defaultComposeConfiguration(network),
@@ -1803,6 +1819,7 @@ async function startAppWriteService(request: FastifyRequest<ServiceStartStop>) {
             environment: [
                 `_APP_INFLUXDB_HOST=${id}-influxdb`,
                 "_APP_INFLUXDB_PORT=8086",
+                `OPEN_RUNTIMES_NETWORK=${network}`,
             ],
             ...defaultComposeConfiguration(network),
         }
@@ -1870,11 +1887,11 @@ async function stopServiceContainers(request: FastifyRequest<ServiceStartStop>) 
         if (destinationDockerId) {
             await executeDockerCmd({
                 dockerId: destinationDockerId,
-                command: `docker ps -a --filter 'label=com.docker.compose.project=${id}' --format {{.ID}}|xargs -n 1 docker stop -t 0`
+                command: `docker ps -a --filter 'label=com.docker.compose.project=${id}' --format {{.ID}}|xargs -r -n 1 docker stop -t 0`
             })
             await executeDockerCmd({
                 dockerId: destinationDockerId,
-                command: `docker ps -a --filter 'label=com.docker.compose.project=${id}' --format {{.ID}}|xargs -n 1 docker rm --force`
+                command: `docker ps -a --filter 'label=com.docker.compose.project=${id}' --format {{.ID}}|xargs -r -n 1 docker rm --force`
             })
             return {}
         }

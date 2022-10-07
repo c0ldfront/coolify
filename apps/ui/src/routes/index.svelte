@@ -21,6 +21,9 @@
 
 <script lang="ts">
 	export let applications: any;
+	export let foundUnconfiguredApplication: boolean;
+	export let foundUnconfiguredService: boolean;
+	export let foundUnconfiguredDatabase: boolean;
 	export let databases: any;
 	export let services: any;
 	export let settings: any;
@@ -28,10 +31,10 @@
 	export let destinations: any;
 
 	let filtered: any = setInitials();
-	import { get } from '$lib/api';
+	import { get, post } from '$lib/api';
 	import { t } from '$lib/translations';
-	import { asyncSleep, getRndInteger } from '$lib/common';
-	import { appSession, search, addToast} from '$lib/store';
+	import { asyncSleep, errorNotification, getRndInteger } from '$lib/common';
+	import { appSession, search } from '$lib/store';
 
 	import ApplicationsIcons from '$lib/components/svg/applications/ApplicationIcons.svelte';
 	import DatabaseIcons from '$lib/components/svg/databases/DatabaseIcons.svelte';
@@ -41,7 +44,42 @@
 
 	let numberOfGetStatus = 0;
 	let status: any = {};
+	let noInitialStatus: any = {
+		applications: false,
+		services: false,
+		databases: false
+	};
+	let loading = {
+		applications: false,
+		services: false,
+		databases: false
+	};
 	doSearch();
+
+	async function refreshStatusApplications() {
+		noInitialStatus.applications = false;
+		numberOfGetStatus = 0;
+		for (const application of applications) {
+			status[application.id] = 'loading';
+			getStatus(application, true);
+		}
+	}
+	async function refreshStatusServices() {
+		noInitialStatus.services = false;
+		numberOfGetStatus = 0;
+		for (const service of services) {
+			status[service.id] = 'loading';
+			getStatus(service, true);
+		}
+	}
+	async function refreshStatusDatabases() {
+		noInitialStatus.databases = false;
+		numberOfGetStatus = 0;
+		for (const database of databases) {
+			status[database.id] = 'loading';
+			getStatus(database, true);
+		}
+	}
 	function setInitials(onlyOthers: boolean = false) {
 		return {
 			applications:
@@ -87,12 +125,23 @@
 		filtered.otherDestinations = [];
 	}
 
-
-	async function getStatus(resources: any) {
-		const { id, buildPack, dualCerts } = resources;
-		if (status[id]) return status[id];
+	async function getStatus(resources: any, force: boolean = false) {
+		const { id, buildPack, dualCerts, type } = resources;
+		if (buildPack && applications.length + filtered.otherApplications.length > 10 && !force) {
+			noInitialStatus.applications = true;
+			return;
+		}
+		if (type && services.length + filtered.otherServices.length > 10 && !force) {
+			noInitialStatus.services = true;
+			return;
+		}
+		if (databases.length + filtered.otherDatabases.length > 10 && !force) {
+			noInitialStatus.databases = true;
+			return;
+		}
+		if (status[id] && !force) return status[id];
 		while (numberOfGetStatus > 1) {
-			await asyncSleep(getRndInteger(100, 200));
+			await asyncSleep(getRndInteger(100, 500));
 		}
 		try {
 			numberOfGetStatus++;
@@ -118,6 +167,7 @@
 			status[id] = 'error';
 			return 'error';
 		} finally {
+			status = { ...status };
 			numberOfGetStatus--;
 		}
 	}
@@ -160,6 +210,7 @@
 	}
 	function applicationFilters(application: any) {
 		return (
+			(application.id && application.id.toLowerCase().includes($search.toLowerCase())) ||
 			(application.name && application.name.toLowerCase().includes($search.toLowerCase())) ||
 			(application.fqdn && application.fqdn.toLowerCase().includes($search.toLowerCase())) ||
 			(application.repository &&
@@ -174,6 +225,7 @@
 	}
 	function databaseFilters(database: any) {
 		return (
+			(database.id && database.id.toLowerCase().includes($search.toLowerCase())) ||
 			(database.name && database.name.toLowerCase().includes($search.toLowerCase())) ||
 			(database.type && database.type.toLowerCase().includes($search.toLowerCase())) ||
 			(database.version && database.version.toLowerCase().includes($search.toLowerCase())) ||
@@ -183,6 +235,7 @@
 	}
 	function serviceFilters(service: any) {
 		return (
+			(service.id && service.id.toLowerCase().includes($search.toLowerCase())) ||
 			(service.name && service.name.toLowerCase().includes($search.toLowerCase())) ||
 			(service.type && service.type.toLowerCase().includes($search.toLowerCase())) ||
 			(service.fqdn && service.fqdn.toLowerCase().includes($search.toLowerCase())) ||
@@ -193,6 +246,7 @@
 	}
 	function gitSourceFilters(source: any) {
 		return (
+			(source.id && source.id.toLowerCase().includes($search.toLowerCase())) ||
 			(source.name && source.name.toLowerCase().includes($search.toLowerCase())) ||
 			(source.type && source.type.toLowerCase().includes($search.toLowerCase())) ||
 			(source.htmlUrl && source.htmlUrl.toLowerCase().includes($search.toLowerCase())) ||
@@ -201,6 +255,7 @@
 	}
 	function destinationFilters(destination: any) {
 		return (
+			(destination.id && destination.id.toLowerCase().includes($search.toLowerCase())) ||
 			(destination.name && destination.name.toLowerCase().includes($search.toLowerCase())) ||
 			(destination.type && destination.type.toLowerCase().includes($search.toLowerCase()))
 		);
@@ -270,7 +325,45 @@
 			filtered = setInitials();
 		}
 	}
-   
+	async function cleanupApplications() {
+		try {
+			const sure = confirm(
+				'Are you sure? This will delete all UNCONFIGURED applications and their data.'
+			);
+			if (sure) {
+				await post(`/applications/cleanup/unconfigured`, {});
+				return window.location.reload();
+			}
+		} catch (error) {
+			return errorNotification(error);
+		}
+	}
+	async function cleanupServices() {
+		try {
+			const sure = confirm(
+				'Are you sure? This will delete all UNCONFIGURED services and their data.'
+			);
+			if (sure) {
+				await post(`/services/cleanup/unconfigured`, {});
+				return window.location.reload();
+			}
+		} catch (error) {
+			return errorNotification(error);
+		}
+	}
+	async function cleanupDatabases() {
+		try {
+			const sure = confirm(
+				'Are you sure? This will delete all UNCONFIGURED databases and their data.'
+			);
+			if (sure) {
+				await post(`/databases/cleanup/unconfigured`, {});
+				return window.location.reload();
+			}
+		} catch (error) {
+			return errorNotification(error);
+		}
+	}
 </script>
 
 <nav class="header">
@@ -281,6 +374,128 @@
 </nav>
 <div class="container lg:mx-auto lg:p-0 px-8 pt-5">
 	{#if applications.length !== 0 || destinations.length !== 0 || databases.length !== 0 || services.length !== 0 || gitSources.length !== 0 || destinations.length !== 0}
+		<div class="space-x-2 lg:flex lg:justify-center text-center mb-4 ">
+			<button
+				class="btn btn-sm btn-ghost"
+				class:bg-applications={$search === '!app'}
+				class:hover:bg-coollabs={$search !== '!app'}
+				on:click={() => doSearch('!app')}
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-6 w-6 mr-2 hidden lg:block "
+					viewBox="0 0 24 24"
+					stroke-width="1.5"
+					stroke="currentcolor"
+					fill="none"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+					<rect x="4" y="4" width="6" height="6" rx="1" />
+					<rect x="4" y="14" width="6" height="6" rx="1" />
+					<rect x="14" y="14" width="6" height="6" rx="1" />
+					<line x1="14" y1="7" x2="20" y2="7" />
+					<line x1="17" y1="4" x2="17" y2="10" />
+				</svg> Applications</button
+			>
+			<button
+				class="btn btn-sm btn-ghost"
+				class:bg-services={$search === '!service'}
+				class:hover:bg-coollabs={$search !== '!service'}
+				on:click={() => doSearch('!service')}
+				><svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-6 w-6 mr-2 hidden lg:block"
+					viewBox="0 0 24 24"
+					stroke-width="1.5"
+					stroke="currentColor"
+					fill="none"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+					<path d="M7 18a4.6 4.4 0 0 1 0 -9a5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7h-12" />
+				</svg> Services</button
+			>
+			<button
+				class="btn btn-sm btn-ghost "
+				class:bg-databases={$search === '!db'}
+				class:hover:bg-coollabs={$search !== '!db'}
+				on:click={() => doSearch('!db')}
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-6 w-6 mr-2 hidden lg:block"
+					viewBox="0 0 24 24"
+					stroke-width="1.5"
+					stroke="currentColor"
+					fill="none"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+					<ellipse cx="12" cy="6" rx="8" ry="3" />
+					<path d="M4 6v6a8 3 0 0 0 16 0v-6" />
+					<path d="M4 12v6a8 3 0 0 0 16 0v-6" />
+				</svg> Databases</button
+			>
+			<button
+				class="btn btn-sm btn-ghost"
+				class:bg-sources={$search === '!git'}
+				class:hover:bg-coollabs={$search !== '!git'}
+				on:click={() => doSearch('!git')}
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-6 w-6 mr-2 hidden lg:block"
+					viewBox="0 0 24 24"
+					stroke-width="1.5"
+					stroke="currentColor"
+					fill="none"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+					<circle cx="6" cy="6" r="2" />
+					<circle cx="18" cy="18" r="2" />
+					<path d="M11 6h5a2 2 0 0 1 2 2v8" />
+					<polyline points="14 9 11 6 14 3" />
+					<path d="M13 18h-5a2 2 0 0 1 -2 -2v-8" />
+					<polyline points="10 15 13 18 10 21" />
+				</svg> Git Sources</button
+			>
+			<button
+				class="btn btn-sm btn-ghost"
+				class:bg-destinations={$search === '!destination'}
+				class:hover:bg-coollabs={$search !== '!destination'}
+				on:click={() => doSearch('!destination')}
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-6 w-6 mr-2 hidden lg:block"
+					viewBox="0 0 24 24"
+					stroke-width="1.5"
+					stroke="currentColor"
+					fill="none"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+					<path
+						d="M22 12.54c-1.804 -.345 -2.701 -1.08 -3.523 -2.94c-.487 .696 -1.102 1.568 -.92 2.4c.028 .238 -.32 1.002 -.557 1h-14c0 5.208 3.164 7 6.196 7c4.124 .022 7.828 -1.376 9.854 -5c1.146 -.101 2.296 -1.505 2.95 -2.46z"
+					/>
+					<path d="M5 10h3v3h-3z" />
+					<path d="M8 10h3v3h-3z" />
+					<path d="M11 10h3v3h-3z" />
+					<path d="M8 7h3v3h-3z" />
+					<path d="M11 7h3v3h-3z" />
+					<path d="M11 4h3v3h-3z" />
+					<path d="M4.571 18c1.5 0 2.047 -.074 2.958 -.78" />
+					<line x1="10" y1="16" x2="10" y2="16.01" />
+				</svg>Destinations</button
+			>
+		</div>
 		<div class="form-control">
 			<div class="input-group flex w-full">
 				<div
@@ -315,39 +530,15 @@
 			<label for="search" class="label w-full mt-3">
 				<span class="label-text text-xs flex flex-wrap gap-2 items-center">
 					<button
-						class:bg-coollabs={$search === '!notmine'}
-						class="badge badge-lg text-white text-xs rounded"
-						on:click={() => doSearch('!notmine')}>Other Teams</button
-					>
-					<button
-						class:bg-coollabs={$search === '!app'}
-						class="badge badge-lg text-white text-xs rounded"
-						on:click={() => doSearch('!app')}>Applications</button
-					>
-					<button
 						class:bg-coollabs={$search === '!bot'}
 						class="badge badge-lg text-white text-xs rounded"
 						on:click={() => doSearch('!bot')}>Bots</button
 					>
+
 					<button
-						class:bg-coollabs={$search === '!service'}
+						class:bg-coollabs={$search === '!notmine'}
 						class="badge badge-lg text-white text-xs rounded"
-						on:click={() => doSearch('!service')}>Services</button
-					>
-					<button
-						class:bg-coollabs={$search === '!db'}
-						class="badge badge-lg text-white text-xs rounded"
-						on:click={() => doSearch('!db')}>Databases</button
-					>
-					<button
-						class:bg-coollabs={$search === '!git'}
-						class="badge badge-lg text-white text-xs rounded"
-						on:click={() => doSearch('!git')}>Git Sources</button
-					>
-					<button
-						class:bg-coollabs={$search === '!destination'}
-						class="badge badge-lg text-white text-xs rounded"
-						on:click={() => doSearch('!destination')}>Destinations</button
+						on:click={() => doSearch('!notmine')}>Other Teams</button
 					>
 					<button
 						class:bg-coollabs={$search === '!running'}
@@ -369,32 +560,49 @@
 		</div>
 	{/if}
 	{#if (filtered.applications.length > 0 && applications.length > 0) || filtered.otherApplications.length > 0}
-		<div class="flex items-center mt-10">
+		<div class="flex items-center mt-10 space-x-2">
 			<h1 class="title lg:text-3xl">Applications</h1>
+			<button class="btn btn-sm btn-primary" on:click={refreshStatusApplications}
+				>{noInitialStatus.applications ? 'Load Status' : 'Refresh Status'}</button
+			>
+			{#if foundUnconfiguredApplication}
+				<button
+					class="btn btn-sm"
+					class:loading={loading.applications}
+					disabled={loading.applications}
+					on:click={cleanupApplications}>Cleanup Unconfigured Resources</button
+				>
+			{/if}
 		</div>
 	{/if}
 	{#if filtered.applications.length > 0 && applications.length > 0}
 		<div class="divider" />
 		<div
-			class="grid grid-col gap-8 auto-cols-max grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 p-4"
+			class="grid grid-col gap-2 lg:gap-8 auto-cols-max grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 p-4"
 		>
 			{#if filtered.applications.length > 0}
 				{#each filtered.applications as application}
 					<a class="no-underline mb-5" href={`/applications/${application.id}`}>
-						<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-green-600 indicator">
+						<div
+							class="w-full rounded p-5 bg-coolgray-200 hover:bg-green-600 indicator duration-150"
+						>
 							{#await getStatus(application)}
-								<span class="indicator-item badge bg-yellow-500 badge-sm" />
-							{:then status}
-								{#if status === 'running'}
-									<span class="indicator-item badge bg-success badge-sm" />
-								{:else}
-									<span class="indicator-item badge bg-error badge-sm" />
+								<span class="indicator-item badge bg-yellow-300 badge-sm" />
+							{:then}
+								{#if !noInitialStatus.applications}
+									{#if status[application.id] === 'loading'}
+										<span class="indicator-item badge bg-yellow-300 badge-sm" />
+									{:else if status[application.id] === 'running'}
+										<span class="indicator-item badge bg-success badge-sm" />
+									{:else}
+										<span class="indicator-item badge bg-error badge-sm" />
+									{/if}
 								{/if}
 							{/await}
 							<div class="w-full flex flex-row">
 								<ApplicationsIcons {application} isAbsolute={true} />
 								<div class="w-full flex flex-col">
-									<h1 class="font-bold text-lg lg:text-xl truncate">
+									<h1 class="font-bold text-base truncate">
 										{application.name}
 										{#if application.settings?.isBot}
 											<span class="text-xs badge bg-coolblack border-none text-applications"
@@ -477,9 +685,6 @@
 		{#if filtered.applications.length > 0}
 			<div class="divider w-32 mx-auto" />
 		{/if}
-		<div class="flex items-center mt-10">
-			<h1 class="text-lg font-bold">Other Teams</h1>
-		</div>
 	{/if}
 	{#if filtered.otherApplications.length > 0}
 		<div
@@ -487,20 +692,24 @@
 		>
 			{#each filtered.otherApplications as application}
 				<a class="no-underline mb-5" href={`/applications/${application.id}`}>
-					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-green-600 indicator">
+					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-green-600 indicator duration-150">
 						{#await getStatus(application)}
-							<span class="indicator-item badge bg-yellow-500 badge-sm" />
-						{:then status}
-							{#if status === 'running'}
-								<span class="indicator-item badge bg-success badge-sm" />
-							{:else}
-								<span class="indicator-item badge bg-error badge-sm" />
+							<span class="indicator-item badge bg-yellow-300 badge-sm" />
+						{:then}
+							{#if !noInitialStatus.applications}
+								{#if status[application.id] === 'loading'}
+									<span class="indicator-item badge bg-yellow-300 badge-sm" />
+								{:else if status[application.id] === 'running'}
+									<span class="indicator-item badge bg-success badge-sm" />
+								{:else}
+									<span class="indicator-item badge bg-error badge-sm" />
+								{/if}
 							{/if}
 						{/await}
 						<div class="w-full flex flex-row">
 							<ApplicationsIcons {application} isAbsolute={true} />
 							<div class="w-full flex flex-col">
-								<h1 class="font-bold text-lg lg:text-xl truncate">
+								<h1 class="font-bold text-base truncate">
 									{application.name}
 									{#if application.settings?.isBot}
 										<span class="text-xs badge bg-coolblack border-none text-applications">BOT</span
@@ -574,8 +783,19 @@
 		</div>
 	{/if}
 	{#if (filtered.services.length > 0 && services.length > 0) || filtered.otherServices.length > 0}
-		<div class="flex items-center mt-10">
+		<div class="flex items-center mt-10 space-x-2">
 			<h1 class="title lg:text-3xl">Services</h1>
+			<button class="btn btn-sm btn-primary" on:click={refreshStatusServices}
+				>{noInitialStatus.services ? 'Load Status' : 'Refresh Status'}</button
+			>
+			{#if foundUnconfiguredService}
+				<button
+					class="btn btn-sm"
+					class:loading={loading.services}
+					disabled={loading.services}
+					on:click={cleanupServices}>Cleanup Unconfigured Resources</button
+				>
+			{/if}
 		</div>
 	{/if}
 	{#if filtered.services.length > 0 && services.length > 0}
@@ -586,20 +806,26 @@
 			{#if filtered.services.length > 0}
 				{#each filtered.services as service}
 					<a class="no-underline mb-5" href={`/services/${service.id}`}>
-						<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-pink-600 indicator">
+						<div
+							class="w-full rounded p-5 bg-coolgray-200 hover:bg-pink-600 indicator duration-150"
+						>
 							{#await getStatus(service)}
-								<span class="indicator-item badge bg-yellow-500 badge-sm" />
-							{:then status}
-								{#if status === 'running'}
-									<span class="indicator-item badge bg-success badge-sm" />
-								{:else}
-									<span class="indicator-item badge bg-error badge-sm" />
+								<span class="indicator-item badge bg-yellow-300 badge-sm" />
+							{:then}
+								{#if !noInitialStatus.services}
+									{#if status[service.id] === 'loading'}
+										<span class="indicator-item badge bg-yellow-300 badge-sm" />
+									{:else if status[service.id] === 'running'}
+										<span class="indicator-item badge bg-success badge-sm" />
+									{:else}
+										<span class="indicator-item badge bg-error badge-sm" />
+									{/if}
 								{/if}
 							{/await}
 							<div class="w-full flex flex-row">
 								<ServiceIcons type={service.type} isAbsolute={true} />
 								<div class="w-full flex flex-col">
-									<h1 class="font-bold text-lg lg:text-xl truncate">{service.name}</h1>
+									<h1 class="font-bold text-base truncate">{service.name}</h1>
 									<div class="h-10 text-xs">
 										{#if service?.fqdn}
 											<h2>{service?.fqdn.replace('https://', '').replace('http://', '')}</h2>
@@ -648,9 +874,6 @@
 		{#if filtered.services.length > 0}
 			<div class="divider w-32 mx-auto" />
 		{/if}
-		<div class="flex items-center mt-10">
-			<h1 class="text-lg font-bold">Other Teams</h1>
-		</div>
 	{/if}
 	{#if filtered.otherServices.length > 0}
 		<div
@@ -658,20 +881,24 @@
 		>
 			{#each filtered.otherServices as service}
 				<a class="no-underline mb-5" href={`/services/${service.id}`}>
-					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-pink-600 indicator">
+					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-pink-600 indicator duration-150">
 						{#await getStatus(service)}
-							<span class="indicator-item badge bg-yellow-500 badge-sm" />
-						{:then status}
-							{#if status === 'running'}
-								<span class="indicator-item badge bg-success badge-sm" />
-							{:else}
-								<span class="indicator-item badge bg-error badge-sm" />
+							<span class="indicator-item badge bg-yellow-300 badge-sm" />
+						{:then}
+							{#if !noInitialStatus.services}
+								{#if status[service.id] === 'loading'}
+									<span class="indicator-item badge bg-yellow-300 badge-sm" />
+								{:else if status[service.id] === 'running'}
+									<span class="indicator-item badge bg-success badge-sm" />
+								{:else}
+									<span class="indicator-item badge bg-error badge-sm" />
+								{/if}
 							{/if}
 						{/await}
 						<div class="w-full flex flex-row">
 							<ServiceIcons type={service.type} isAbsolute={true} />
 							<div class="w-full flex flex-col">
-								<h1 class="font-bold text-lg lg:text-xl truncate">{service.name}</h1>
+								<h1 class="font-bold text-base truncate">{service.name}</h1>
 								<div class="h-10 text-xs">
 									{#if service?.fqdn}
 										<h2>{service?.fqdn.replace('https://', '').replace('http://', '')}</h2>
@@ -714,8 +941,19 @@
 		</div>
 	{/if}
 	{#if (filtered.databases.length > 0 && databases.length > 0) || filtered.otherDatabases.length > 0}
-		<div class="flex items-center mt-10">
+		<div class="flex items-center mt-10 space-x-2">
 			<h1 class="title lg:text-3xl">Databases</h1>
+			<button class="btn btn-sm btn-primary" on:click={refreshStatusDatabases}
+				>{noInitialStatus.databases ? 'Load Status' : 'Refresh Status'}</button
+			>
+			{#if foundUnconfiguredDatabase}
+				<button
+					class="btn btn-sm"
+					class:loading={loading.databases}
+					disabled={loading.databases}
+					on:click={cleanupDatabases}>Cleanup Unconfigured Resources</button
+				>
+			{/if}
 		</div>
 	{/if}
 	{#if filtered.databases.length > 0 && databases.length > 0}
@@ -726,21 +964,27 @@
 			{#if filtered.databases.length > 0}
 				{#each filtered.databases as database}
 					<a class="no-underline mb-5" href={`/databases/${database.id}`}>
-						<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-databases indicator">
+						<div
+							class="w-full rounded p-5 bg-coolgray-200 hover:bg-databases indicator duration-150"
+						>
 							{#await getStatus(database)}
-								<span class="indicator-item badge bg-yellow-500 badge-sm" />
-							{:then status}
-								{#if status === 'running'}
-									<span class="indicator-item badge bg-success badge-sm" />
-								{:else}
-									<span class="indicator-item badge bg-error badge-sm" />
+								<span class="indicator-item badge bg-yellow-300 badge-sm" />
+							{:then}
+								{#if !noInitialStatus.databases}
+									{#if status[database.id] === 'loading'}
+										<span class="indicator-item badge bg-yellow-300 badge-sm" />
+									{:else if status[database.id] === 'running'}
+										<span class="indicator-item badge bg-success badge-sm" />
+									{:else}
+										<span class="indicator-item badge bg-error badge-sm" />
+									{/if}
 								{/if}
 							{/await}
 							<div class="w-full flex flex-row">
 								<DatabaseIcons type={database.type} isAbsolute={true} />
 								<div class="w-full flex flex-col">
 									<div class="h-10">
-										<h1 class="font-bold text-lg lg:text-xl truncate">{database.name}</h1>
+										<h1 class="font-bold text-base truncate">{database.name}</h1>
 										<div class="h-10 text-xs">
 											{#if database?.version}
 												<h2 class="">{database?.version}</h2>
@@ -792,9 +1036,6 @@
 		{#if filtered.databases.length > 0}
 			<div class="divider w-32 mx-auto" />
 		{/if}
-		<div class="flex items-center mt-10">
-			<h1 class="text-lg font-bold">Other Teams</h1>
-		</div>
 	{/if}
 	{#if filtered.otherDatabases.length > 0}
 		<div
@@ -802,21 +1043,25 @@
 		>
 			{#each filtered.otherDatabases as database}
 				<a class="no-underline mb-5" href={`/databases/${database.id}`}>
-					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-databases indicator">
+					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-databases indicator duration-150">
 						{#await getStatus(database)}
-							<span class="indicator-item badge bg-yellow-500 badge-sm" />
-						{:then status}
-							{#if status === 'running'}
-								<span class="indicator-item badge bg-success badge-sm" />
-							{:else}
-								<span class="indicator-item badge bg-error badge-sm" />
+							<span class="indicator-item badge bg-yellow-300 badge-sm" />
+						{:then}
+							{#if !noInitialStatus.databases}
+								{#if status[database.id] === 'loading'}
+									<span class="indicator-item badge bg-yellow-300 badge-sm" />
+								{:else if status[database.id] === 'running'}
+									<span class="indicator-item badge bg-success badge-sm" />
+								{:else}
+									<span class="indicator-item badge bg-error badge-sm" />
+								{/if}
 							{/if}
 						{/await}
 						<div class="w-full flex flex-row">
 							<DatabaseIcons type={database.type} isAbsolute={true} />
 							<div class="w-full flex flex-col">
 								<div class="h-10">
-									<h1 class="font-bold text-lg lg:text-xl truncate">{database.name}</h1>
+									<h1 class="font-bold text-base truncate">{database.name}</h1>
 									<div class="h-10 text-xs">
 										{#if database?.version}
 											<h2 class="">{database?.version}</h2>
@@ -874,11 +1119,11 @@
 			{#if filtered.gitSources.length > 0}
 				{#each filtered.gitSources as source}
 					<a class="no-underline mb-5" href={`/sources/${source.id}`}>
-						<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-sources indicator">
+						<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-sources indicator duration-150">
 							<div class="w-full flex flex-row">
-								<div class="absolute top-0 left-0 -m-5 h-10 w-10">
+								<div class="absolute top-0 left-0 -m-5 flex">
 									{#if source?.type === 'gitlab'}
-										<svg viewBox="0 0 128 128">
+										<svg viewBox="0 0 128 128" class="h-10 w-10">
 											<path
 												fill="#FC6D26"
 												d="M126.615 72.31l-7.034-21.647L105.64 7.76c-.716-2.206-3.84-2.206-4.556 0l-13.94 42.903H40.856L26.916 7.76c-.717-2.206-3.84-2.206-4.557 0L8.42 50.664 1.385 72.31a4.792 4.792 0 001.74 5.358L64 121.894l60.874-44.227a4.793 4.793 0 001.74-5.357"
@@ -900,7 +1145,7 @@
 											/>
 										</svg>
 									{:else if source?.type === 'github'}
-										<svg viewBox="0 0 128 128">
+										<svg viewBox="0 0 128 128" class="h-10 w-10">
 											<g fill="#ffffff"
 												><path
 													fill-rule="evenodd"
@@ -912,10 +1157,30 @@
 											>
 										</svg>
 									{/if}
+
+									{#if source.isSystemWide}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-10 w-10"
+											viewBox="0 0 24 24"
+											stroke-width="1.5"
+											stroke="currentColor"
+											fill="none"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+											<circle cx="12" cy="12" r="9" />
+											<line x1="3.6" y1="9" x2="20.4" y2="9" />
+											<line x1="3.6" y1="15" x2="20.4" y2="15" />
+											<path d="M11.5 3a17 17 0 0 0 0 18" />
+											<path d="M12.5 3a17 17 0 0 1 0 18" />
+										</svg>
+									{/if}
 								</div>
 								<div class="w-full flex flex-col">
 									<div class="h-10">
-										<h1 class="font-bold text-lg lg:text-xl truncate">{source.name}</h1>
+										<h1 class="font-bold text-base truncate">{source.name}</h1>
 										{#if source.teams.length > 0 && source.teams[0]?.name}
 											<div class="truncate text-xs">{source.teams[0]?.name}</div>
 										{/if}
@@ -936,9 +1201,6 @@
 		{#if filtered.gitSources.length > 0}
 			<div class="divider w-32 mx-auto" />
 		{/if}
-		<div class="flex items-center mt-10">
-			<h1 class="text-lg font-bold">Other Teams</h1>
-		</div>
 	{/if}
 	{#if filtered.otherGitSources.length > 0}
 		<div
@@ -946,11 +1208,11 @@
 		>
 			{#each filtered.otherGitSources as source}
 				<a class="no-underline mb-5" href={`/sources/${source.id}`}>
-					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-sources indicator">
+					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-sources indicator duration-150">
 						<div class="w-full flex flex-row">
-							<div class="absolute top-0 left-0 -m-5 h-10 w-10">
+							<div class="absolute top-0 left-0 -m-5 flex">
 								{#if source?.type === 'gitlab'}
-									<svg viewBox="0 0 128 128">
+									<svg viewBox="0 0 128 128" class="h-10 w-10">
 										<path
 											fill="#FC6D26"
 											d="M126.615 72.31l-7.034-21.647L105.64 7.76c-.716-2.206-3.84-2.206-4.556 0l-13.94 42.903H40.856L26.916 7.76c-.717-2.206-3.84-2.206-4.557 0L8.42 50.664 1.385 72.31a4.792 4.792 0 001.74 5.358L64 121.894l60.874-44.227a4.793 4.793 0 001.74-5.357"
@@ -972,7 +1234,7 @@
 										/>
 									</svg>
 								{:else if source?.type === 'github'}
-									<svg viewBox="0 0 128 128">
+									<svg viewBox="0 0 128 128" class="h-10 w-10">
 										<g fill="#ffffff"
 											><path
 												fill-rule="evenodd"
@@ -984,10 +1246,30 @@
 										>
 									</svg>
 								{/if}
+
+								{#if source.isSystemWide}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-10 w-10"
+										viewBox="0 0 24 24"
+										stroke-width="1.5"
+										stroke="currentColor"
+										fill="none"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+										<circle cx="12" cy="12" r="9" />
+										<line x1="3.6" y1="9" x2="20.4" y2="9" />
+										<line x1="3.6" y1="15" x2="20.4" y2="15" />
+										<path d="M11.5 3a17 17 0 0 0 0 18" />
+										<path d="M12.5 3a17 17 0 0 1 0 18" />
+									</svg>
+								{/if}
 							</div>
 							<div class="w-full flex flex-col">
 								<div class="h-10">
-									<h1 class="font-bold text-lg lg:text-xl truncate">{source.name}</h1>
+									<h1 class="font-bold text-base truncate">{source.name}</h1>
 									{#if source.teams.length > 0 && source.teams[0]?.name}
 										<div class="truncate text-xs">{source.teams[0]?.name}</div>
 									{/if}
@@ -1013,7 +1295,9 @@
 			{#if filtered.destinations.length > 0}
 				{#each filtered.destinations as destination}
 					<a class="no-underline mb-5" href={`/destinations/${destination.id}`}>
-						<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-destinations indicator">
+						<div
+							class="w-full rounded p-5 bg-coolgray-200 hover:bg-destinations indicator duration-150"
+						>
 							<div class="w-full flex flex-row">
 								<div class="absolute top-0 left-0 -m-5 h-10 w-10">
 									<svg
@@ -1059,7 +1343,7 @@
 									{/if}
 								</div>
 								<div class="w-full flex flex-col">
-									<h1 class="font-bold text-lg lg:text-xl truncate">{destination.name}</h1>
+									<h1 class="font-bold text-base truncate">{destination.name}</h1>
 									<div class="h-10 text-xs">
 										{#if $appSession.teamId === '0' && destination.remoteVerified === false && destination.remoteEngine}
 											<h2 class="text-red-500">Not verified yet</h2>
@@ -1085,9 +1369,6 @@
 		{#if filtered.destinations.length > 0}
 			<div class="divider w-32 mx-auto" />
 		{/if}
-		<div class="flex items-center mt-10">
-			<h1 class="text-lg font-bold">Other Teams</h1>
-		</div>
 	{/if}
 	{#if filtered.otherDestinations.length > 0}
 		<div
@@ -1095,7 +1376,9 @@
 		>
 			{#each filtered.otherDestinations as destination}
 				<a class="no-underline mb-5" href={`/destinations/${destination.id}`}>
-					<div class="w-full rounded p-5 bg-coolgray-200 hover:bg-destinations indicator">
+					<div
+						class="w-full rounded p-5 bg-coolgray-200 hover:bg-destinations indicator duration-150"
+					>
 						<div class="w-full flex flex-row">
 							<div class="absolute top-0 left-0 -m-5 h-10 w-10">
 								<svg
@@ -1141,7 +1424,7 @@
 								{/if}
 							</div>
 							<div class="w-full flex flex-col">
-								<h1 class="font-bold text-lg lg:text-xl truncate">{destination.name}</h1>
+								<h1 class="font-bold text-base truncate">{destination.name}</h1>
 								<div class="h-10 text-xs">
 									{#if $appSession.teamId === '0' && destination.remoteVerified === false && destination.remoteEngine}
 										<h2 class="text-red-500">Not verified yet</h2>

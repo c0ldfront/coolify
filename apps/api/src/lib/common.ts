@@ -9,7 +9,6 @@ import generator from 'generate-password';
 import crypto from 'crypto';
 import { promises as dns } from 'dns';
 import { PrismaClient } from '@prisma/client';
-import cuid from 'cuid';
 import os from 'os';
 import sshConfig from 'ssh-config';
 
@@ -21,7 +20,7 @@ import { scheduler } from './scheduler';
 import { supportedServiceTypesAndVersions } from './services/supportedVersions';
 import { includeServices } from './services/common';
 
-export const version = '3.10.5';
+export const version = '3.10.14';
 export const isDev = process.env.NODE_ENV === 'development';
 
 const algorithm = 'aes-256-ctr';
@@ -45,7 +44,7 @@ export function getAPIUrl() {
 	if (process.env.CODESANDBOX_HOST) {
 		return `https://${process.env.CODESANDBOX_HOST.replace(/\$PORT/, '3001')}`;
 	}
-	return isDev ? 'http://host.docker.internal:3001' : 'http://localhost:3000';
+	return isDev ? 'http://localhost:3001' : 'http://localhost:3000';
 }
 
 export function getUIUrl() {
@@ -88,41 +87,51 @@ export const asyncExecShellStream = async ({
 		const subprocess = execaCommand(command, {
 			env: { DOCKER_BUILDKIT: '1', DOCKER_HOST: engine }
 		});
-		if (debug) {
-			subprocess.stdout.on('data', async (data) => {
-				const stdout = data.toString();
-				const array = stdout.split('\n');
-				for (const line of array) {
-					if (line !== '\n' && line !== '') {
-						logs.push(line.replace('\n', ''))
-						debug && await saveBuildLog({
-							line: `${line.replace('\n', '')}`,
-							buildId,
-							applicationId
-						});
+		const logs = [];
+		subprocess.stdout.on('data', async (data) => {
+			const stdout = data.toString();
+			const array = stdout.split('\n');
+			for (const line of array) {
+				if (line !== '\n' && line !== '') {
+					const log = {
+						line: `${line.replace('\n', '')}`,
+						buildId,
+						applicationId
+					}
+					logs.push(log);
+					if (debug) {
+						await saveBuildLog(log);
 					}
 				}
-			});
-			subprocess.stderr.on('data', async (data) => {
-				const stderr = data.toString();
-				const array = stderr.split('\n');
-				for (const line of array) {
-					if (line !== '\n' && line !== '') {
-						errorLogs.push(line.replace('\n', ''))
-						debug && await saveBuildLog({
-							line: `${line.replace('\n', '')}`,
-							buildId,
-							applicationId
-						});	
+			}
+		});
+		subprocess.stderr.on('data', async (data) => {
+			const stderr = data.toString();
+			const array = stderr.split('\n');
+			for (const line of array) {
+				if (line !== '\n' && line !== '') {
+					const log = {
+						line: `${line.replace('\n', '')}`,
+						buildId,
+						applicationId
+					}
+					logs.push(log);
+					if (debug) {
+						await saveBuildLog(log);
 					}
 				}
-			});
-		}
+			}
+		});
 		subprocess.on('exit', async (code) => {
 			await asyncSleep(1000);
 			if (code === 0) {
 				resolve(code);
 			} else {
+				if (!debug) {
+					for (const log of logs) {
+						await saveBuildLog(log);
+					}
+				}
 				reject(code);
 			}
 		});
@@ -513,7 +522,7 @@ export async function createRemoteEngineConfiguration(id: string) {
 		try {
 			await fs.stat(`/tmp/coolify-ssh-agent.pid`);
 			await fs.rm(`/tmp/coolify-ssh-agent.pid`);
-		} catch (error) {}
+		} catch (error) { }
 		await asyncExecShell(`eval $(ssh-agent -sa /tmp/coolify-ssh-agent.pid)`);
 	}
 	await asyncExecShell(`SSH_AUTH_SOCK=/tmp/coolify-ssh-agent.pid ssh-add -q ${sshKeyFile}`);
@@ -526,9 +535,19 @@ export async function createRemoteEngineConfiguration(id: string) {
 			await asyncExecShell(
 				`SSH_AUTH_SOCK=/tmp/coolify-ssh-agent.pid ssh -F /dev/null -o "StrictHostKeyChecking no" -fNL ${localPort}:localhost:${remotePort} ${remoteUser}@${remoteIpAddress}`
 			);
-		} catch (error) {}
+		} catch (error) { }
 	}
 	const config = sshConfig.parse('');
+	const foundWildcard = config.find({ Host: '*' });
+	if (!foundWildcard) {
+		config.append({
+			Host: '*',
+			StrictHostKeyChecking: 'no',
+			ControlMaster: 'auto',
+			ControlPath: `${homedir}/.ssh/coolify-%r@%h:%p`,
+			ControlPersist: '10m'
+		})
+	}
 	const found = config.find({ Host: remoteIpAddress });
 	if (!found) {
 		config.append({
@@ -540,6 +559,7 @@ export async function createRemoteEngineConfiguration(id: string) {
 			StrictHostKeyChecking: 'no'
 		});
 	}
+
 	try {
 		await fs.stat(`${homedir}/.ssh/`);
 	} catch (error) {
@@ -578,7 +598,7 @@ export async function executeDockerCmd({ debug, buildId, applicationId, dockerId
 			command = command.replace(/docker compose/gi, 'docker-compose');
 		}
 	}
-	if (command.startsWith(`docker build --progress plain`)) {
+	if (command.startsWith(`docker build --progress plain`) || command.startsWith(`pack build`)) {
 		return await asyncExecShellStream({ debug, buildId, applicationId, command, engine });
 	}
 	return await execaCommand(command, { env: { DOCKER_BUILDKIT: "1", DOCKER_HOST: engine }, shell: true })
@@ -738,32 +758,32 @@ type DatabaseConfiguration = {
 	};
 }
 	| {
-			volume: string;
-			image: string;
-			command?: string;
-			ulimits: Record<string, unknown>;
-			privatePort: number;
-			environmentVariables: {
-				MONGO_INITDB_ROOT_USERNAME?: string;
-				MONGO_INITDB_ROOT_PASSWORD?: string;
-				MONGODB_ROOT_USER?: string;
-				MONGODB_ROOT_PASSWORD?: string;
-			};
-	  }
+		volume: string;
+		image: string;
+		command?: string;
+		ulimits: Record<string, unknown>;
+		privatePort: number;
+		environmentVariables: {
+			MONGO_INITDB_ROOT_USERNAME?: string;
+			MONGO_INITDB_ROOT_PASSWORD?: string;
+			MONGODB_ROOT_USER?: string;
+			MONGODB_ROOT_PASSWORD?: string;
+		};
+	}
 	| {
-			volume: string;
-			image: string;
-			command?: string;
-			ulimits: Record<string, unknown>;
-			privatePort: number;
-			environmentVariables: {
-				MARIADB_ROOT_USER: string;
-				MARIADB_ROOT_PASSWORD: string;
-				MARIADB_USER: string;
-				MARIADB_PASSWORD: string;
-				MARIADB_DATABASE: string;
-			};
-	  }
+		volume: string;
+		image: string;
+		command?: string;
+		ulimits: Record<string, unknown>;
+		privatePort: number;
+		environmentVariables: {
+			MARIADB_ROOT_USER: string;
+			MARIADB_ROOT_PASSWORD: string;
+			MARIADB_USER: string;
+			MARIADB_PASSWORD: string;
+			MARIADB_DATABASE: string;
+		};
+	}
 	| {
 		volume: string;
 		image: string;
@@ -919,9 +939,8 @@ export function generateDatabaseConfiguration(database: any, arch: string): Data
 		};
 		if (isARM(arch)) {
 			configuration.volume = `${id}-${type}-data:/data`;
-			configuration.command = `/usr/local/bin/redis-server --appendonly ${
-				appendOnly ? 'yes' : 'no'
-			} --requirepass ${dbUserPassword}`;
+			configuration.command = `/usr/local/bin/redis-server --appendonly ${appendOnly ? 'yes' : 'no'
+				} --requirepass ${dbUserPassword}`;
 		}
 		return configuration;
 	} else if (type === 'couchdb') {
@@ -1005,12 +1024,12 @@ export type ComposeFileService = {
 	command?: string;
 	ports?: string[];
 	build?:
-		| {
-				context: string;
-				dockerfile: string;
-				args?: Record<string, unknown>;
-		  }
-		| string;
+	| {
+		context: string;
+		dockerfile: string;
+		args?: Record<string, unknown>;
+	}
+	| string;
 	deploy?: {
 		restart_policy?: {
 			condition?: string;
@@ -1079,7 +1098,7 @@ export const createDirectories = async ({
 	let workdirFound = false;
 	try {
 		workdirFound = !!(await fs.stat(workdir));
-	} catch (error) {}
+	} catch (error) { }
 	if (workdirFound) {
 		await asyncExecShell(`rm -fr ${workdir}`);
 	}
@@ -1367,8 +1386,7 @@ export async function startTraefikTCPProxy(
 	
 	if (type === 'wordpressftp') dependentId = `${id}-ftp`;
 	if (type === 'giteassh') dependentId = `${id}-ssh`;
-
-	const foundDependentContainer = await checkContainer({
+	const { found: foundDependentContainer } = await checkContainer({
 		dockerId,
 		container: dependentId,
 		remove: true
@@ -1453,6 +1471,9 @@ export async function getServiceFromDB({
 		where: { id, teams: { some: { id: teamId === '0' ? undefined : teamId } } },
 		include: includeServices
 	});
+	if (!body) {
+		return null
+	}
 	let { type } = body;
 	type = fixType(type);
 
@@ -1620,7 +1641,7 @@ export async function stopBuild(buildId, applicationId) {
 					}
 				}
 				count++;
-			} catch (error) {}
+			} catch (error) { }
 		}, 100);
 	});
 }
@@ -1651,28 +1672,28 @@ export async function cleanupDockerStorage(dockerId, lowDiskSpace, force) {
 		if (images) {
 			await executeDockerCmd({ dockerId, command: `docker rmi -f ${images}" -q | xargs -r` });
 		}
-	} catch (error) {}
+	} catch (error) { }
 	if (lowDiskSpace || force) {
-		if (isDev) {
-			if (!force) console.log(`[DEV MODE] Low disk space: ${lowDiskSpace}`);
-			return;
-		}
+		// if (isDev) {
+		// 	if (!force) console.log(`[DEV MODE] Low disk space: ${lowDiskSpace}`);
+		// 	return;
+		// }
 		try {
 			await executeDockerCmd({
 				dockerId,
 				command: `docker container prune -f --filter "label=coolify.managed=true"`
 			});
-		} catch (error) {}
+		} catch (error) { }
 		try {
 			await executeDockerCmd({ dockerId, command: `docker image prune -f` });
-		} catch (error) {}
+		} catch (error) { }
 		try {
 			await executeDockerCmd({ dockerId, command: `docker image prune -a -f` });
-		} catch (error) {}
+		} catch (error) { }
 		// Cleanup build caches
 		try {
 			await executeDockerCmd({ dockerId, command: `docker builder prune -a -f` });
-		} catch (error) {}
+		} catch (error) { }
 	}
 }
 
